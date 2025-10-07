@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { MarketStats } from "@/components/home/MarketStats";
 import { LeaderboardTable } from "@/components/home/LeaderboardTable";
@@ -14,6 +14,7 @@ export default function HomePage() {
   const [tokens, setTokens] = useState<LeaderboardToken[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchTokens = async () => {
     setIsLoading(true);
@@ -53,6 +54,15 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
+  // Ensure video plays
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch((err) => {
+        console.log("Video autoplay prevented:", err);
+      });
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background-primary">
       {/* Hero Section */}
@@ -77,6 +87,7 @@ export default function HomePage() {
             {/* Hero Video */}
             <div className="relative mx-auto mt-8 max-w-4xl rounded-lg overflow-hidden border border-border bg-background-card aspect-video">
               <video
+                ref={videoRef}
                 autoPlay
                 muted
                 loop
@@ -84,7 +95,7 @@ export default function HomePage() {
                 preload="auto"
                 className="w-full h-full object-cover"
               >
-                <source src="/videos/3635333496911377835.mov" type="video/mp4" />
+                <source src="/videos/3635333496911377835.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
             </div>

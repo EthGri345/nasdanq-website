@@ -16,6 +16,9 @@ const DUNE_BASE = "https://api.dune.com/api/v1";
 // Query IDs from Memecoin Wars dashboard
 const QUERY_24H = "5137851"; // 24 hour top tokens
 const QUERY_7D = "5138002"; // 7 day top tokens
+const QUERY_VOLUME = "5440994"; // Pump.fun 24h volume
+const QUERY_DAILY_TOKENS = "4006260"; // Daily tokens created
+const QUERY_GRADUATES = "5041379"; // Pump.fun graduates (last 24h)
 
 interface DuneRow {
   asset: string;
@@ -181,34 +184,27 @@ export async function getTop7dTokens(
 export async function getMarketStats(): Promise<ApiResponse<TokenStats>> {
   try {
     console.log("[Dune] Fetching market stats...");
-    const rows = await fetchDuneQuery(QUERY_24H, 100);
 
-    if (rows.length === 0) {
-      return {
-        data: {
-          totalVolume24h: 0,
-          activeTokens: 0,
-          topGainer: { symbol: "--", change: 0 },
-        },
-        error: null,
-        timestamp: Date.now(),
-      };
-    }
+    // Fetch all three stats queries in parallel
+    const [volumeData, tokensData, graduatesData] = await Promise.all([
+      fetchDuneQuery(QUERY_VOLUME, 1),
+      fetchDuneQuery(QUERY_DAILY_TOKENS, 1),
+      fetchDuneQuery(QUERY_GRADUATES, 1),
+    ]);
 
-    // Calculate total market cap as volume proxy
-    const totalVolume = rows.reduce((sum, row) => sum + row.market_cap, 0);
-    const activeTokens = rows.length;
+    const volume24h = volumeData[0]?.volume_usd_24h || 0;
+    const dailyTokens = tokensData[0]?.tokens_created_24h || 0;
+    const graduates = graduatesData[0]?.withdraw_token_last_24h || 0;
 
-    // Top token by market cap
-    const topToken = rows[0];
+    console.log("[Dune] Stats:", { volume24h, dailyTokens, graduates });
 
     return {
       data: {
-        totalVolume24h: totalVolume,
-        activeTokens,
+        totalVolume24h: volume24h,
+        activeTokens: dailyTokens,
         topGainer: {
-          symbol: topToken.asset,
-          change: 0, // Would need historical data
+          symbol: `${graduates}`,
+          change: 0,
         },
       },
       error: null,

@@ -36,20 +36,16 @@ export function MarketStats() {
       />
 
       <StatCard
-        label="Active Tokens"
+        label="Daily Tokens"
         value={stats ? formatCompactNumber(stats.activeTokens) : "--"}
-        subtitle="Tokens traded today"
+        subtitle="Tokens created (24h)"
         isLoading={isLoading}
       />
 
       <StatCard
-        label="Top Gainer"
-        value={
-          stats
-            ? `${stats.topGainer.symbol} ${stats.topGainer.change.toFixed(0)}%`
-            : "--"
-        }
-        subtitle="Best performer (24h)"
+        label="Pump.fun Graduates"
+        value={stats ? stats.topGainer.symbol : "--"}
+        subtitle="Graduated (24h)"
         trend={stats ? "up" : undefined}
         isLoading={isLoading}
       />
