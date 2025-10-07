@@ -172,24 +172,6 @@ export function LeaderboardTable({ tokens, isLoading = false }: LeaderboardTable
               </th>
               <th className="px-4 py-3 text-right">
                 <button
-                  onClick={() => handleSort("priceChange24h")}
-                  className="flex items-center justify-end space-x-1 text-xs font-semibold uppercase tracking-wide text-text-secondary hover:text-accent-green transition-colors ml-auto"
-                >
-                  <span>24h %</span>
-                  <SortIcon columnKey="priceChange24h" />
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right">
-                <button
-                  onClick={() => handleSort("volume24h")}
-                  className="flex items-center justify-end space-x-1 text-xs font-semibold uppercase tracking-wide text-text-secondary hover:text-accent-green transition-colors ml-auto"
-                >
-                  <span>Volume</span>
-                  <SortIcon columnKey="volume24h" />
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right">
-                <button
                   onClick={() => handleSort("marketCap")}
                   className="flex items-center justify-end space-x-1 text-xs font-semibold uppercase tracking-wide text-text-secondary hover:text-accent-green transition-colors ml-auto"
                 >
@@ -240,23 +222,6 @@ export function LeaderboardTable({ tokens, isLoading = false }: LeaderboardTable
                       minimumFractionDigits: 6,
                       maximumFractionDigits: 6,
                     })}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-right">
-                  <span
-                    className={cn(
-                      "font-mono text-sm font-medium",
-                      token.priceChange24h > 0
-                        ? "text-accent-green"
-                        : "text-accent-pink"
-                    )}
-                  >
-                    {formatPercentage(token.priceChange24h)}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-right">
-                  <span className="font-mono text-sm text-text-primary">
-                    ${formatCompactNumber(token.volume24h)}
                   </span>
                 </td>
                 <td className="px-4 py-4 text-right">

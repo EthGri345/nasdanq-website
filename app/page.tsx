@@ -6,7 +6,7 @@ import { MarketStats } from "@/components/home/MarketStats";
 import { LeaderboardTable } from "@/components/home/LeaderboardTable";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { getTop24hTokens, getTop7dTokens } from "@/lib/api/dexscreener";
+import { getTop24hTokens, getTop7dTokens } from "@/lib/api/dune";
 import type { LeaderboardToken, LeaderboardPeriod } from "@/types/token";
 
 export default function HomePage() {
@@ -20,15 +20,24 @@ export default function HomePage() {
     setError(null);
 
     try {
+      console.log(`[HomePage] Fetching ${period} tokens...`);
       const response =
         period === "24h" ? await getTop24hTokens(50) : await getTop7dTokens(50);
+
+      console.log(`[HomePage] Response:`, {
+        hasData: !!response.data,
+        dataLength: response.data?.length,
+        error: response.error
+      });
 
       if (response.error) {
         setError(response.error);
       } else if (response.data) {
         setTokens(response.data);
+        console.log(`[HomePage] Set ${response.data.length} tokens`);
       }
     } catch (err) {
+      console.error("[HomePage] Fetch error:", err);
       setError("Failed to fetch token data");
     } finally {
       setIsLoading(false);
@@ -72,10 +81,10 @@ export default function HomePage() {
                 muted
                 loop
                 playsInline
+                preload="auto"
                 className="w-full h-full object-cover"
               >
-                <source src="/videos/3635333496911377835.mov" type="video/quicktime" />
-                <source src="/videos/8872483471728788470.mov" type="video/quicktime" />
+                <source src="/videos/3635333496911377835.mov" type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
             </div>
@@ -114,7 +123,7 @@ export default function HomePage() {
                 Top Tokens
               </h2>
               <p className="text-text-secondary mt-2">
-                Real-time leaderboard from Pump.fun
+                Live Pump.fun data from Dune Analytics
               </p>
             </div>
 

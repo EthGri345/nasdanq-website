@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { StatCard } from "@/components/ui/StatCard";
-import { getMarketStats } from "@/lib/api/dexscreener";
+import { getMarketStats } from "@/lib/api/dune";
 import { formatCompactNumber } from "@/lib/utils/format";
 import type { TokenStats } from "@/types/token";
 

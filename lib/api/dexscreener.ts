@@ -12,6 +12,7 @@ import type {
 
 const DEXSCREENER_BASE = "https://api.dexscreener.com/latest";
 const PUMP_FUN_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"; // Pump.fun program ID
+const PUMP_FUN_UPDATE_AUTHORITY = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM"; // All pump tokens have this
 
 interface DexPair {
   chainId: string;
@@ -64,36 +65,96 @@ interface DexScreenerResponse {
 }
 
 /**
- * Fetch top Pump.fun tokens from DexScreener
+ * Fetch actual Pump.fun tokens from DexScreener
+ * Uses token-profiles API to get latest Pump.fun launches
  * FREE API - No key required!
  */
 async function fetchPumpFunTokens(): Promise<DexPair[]> {
   try {
-    // Get recent Solana pairs (includes Pump.fun tokens)
-    const response = await fetch(
-      `${DEXSCREENER_BASE}/dex/tokens/So11111111111111111111111111111111111111112`,
-      {
-        next: { revalidate: 30 }, // Cache for 30 seconds
-      }
+    console.log("[DexScreener] Fetching latest token profiles...");
+
+    // Get latest token profiles - these include newly launched tokens
+    const profilesResponse = await fetch(
+      "https://api.dexscreener.com/token-profiles/latest/v1"
     );
 
-    if (!response.ok) {
-      throw new Error(`DexScreener API error: ${response.status}`);
+    if (!profilesResponse.ok) {
+      throw new Error(`Profiles API error: ${profilesResponse.status}`);
     }
 
-    const data: DexScreenerResponse = await response.json();
+    const profiles = await profilesResponse.json();
 
-    // Filter for Pump.fun tokens (they use specific DEX IDs)
-    const pumpFunPairs = data.pairs.filter(
-      (pair) =>
-        pair.chainId === "solana" &&
-        (pair.dexId === "raydium" || pair.dexId === "pumpfun") &&
-        pair.volume.h24 > 0 // Has trading volume
-    );
+    // Filter for Solana tokens with "pump" in address (Pump.fun tokens)
+    const pumpTokenAddresses = profiles
+      .filter((p: any) =>
+        p.chainId === "solana" &&
+        p.tokenAddress &&
+        p.tokenAddress.toLowerCase().includes("pump")
+      )
+      .map((p: any) => p.tokenAddress);
+
+    console.log(`[DexScreener] Found ${pumpTokenAddresses.length} Pump.fun token addresses`);
+
+    if (pumpTokenAddresses.length === 0) {
+      console.warn("[DexScreener] No Pump.fun tokens found in profiles");
+      return [];
+    }
+
+    // Fetch pair data for each token
+    const allPairs: DexPair[] = [];
+
+    // Fetch in batches to avoid rate limits
+    for (let i = 0; i < Math.min(pumpTokenAddresses.length, 100); i++) {
+      const address = pumpTokenAddresses[i];
+
+      try {
+        const response = await fetch(
+          `${DEXSCREENER_BASE}/dex/tokens/${address}`
+        );
+
+        if (response.ok) {
+          const data: DexScreenerResponse = await response.json();
+          if (data.pairs && data.pairs.length > 0) {
+            // Get the pair with highest liquidity for this token
+            const bestPair = data.pairs
+              .filter(p => p.chainId === "solana")
+              .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+
+            if (bestPair) {
+              allPairs.push(bestPair);
+            }
+          }
+        }
+
+        // Small delay to avoid rate limiting
+        if (i % 10 === 0 && i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (err) {
+        console.warn(`[DexScreener] Failed to fetch token ${address}:`, err);
+      }
+    }
+
+    console.log(`[DexScreener] Fetched ${allPairs.length} token pairs`);
+
+    // Filter for valid Pump.fun tokens
+    const pumpFunPairs = allPairs.filter((pair) => {
+      const isOnSolana = pair.chainId === "solana";
+      const isPumpFun = pair.dexId === "pumpfun" || pair.dexId === "raydium" || pair.dexId === "pumpswap";
+      const hasMinCap = pair.marketCap && pair.marketCap > 1000; // At least $1k
+      const hasMinVolume = pair.volume && pair.volume.h24 > 100; // At least $100 volume
+      const notWrappedSol =
+        pair.baseToken.symbol !== "SOL" &&
+        pair.baseToken.symbol !== "WSOL";
+
+      return isOnSolana && isPumpFun && hasMinCap && hasMinVolume && notWrappedSol;
+    });
+
+    console.log(`[DexScreener] Filtered to ${pumpFunPairs.length} valid Pump.fun tokens`);
 
     return pumpFunPairs;
   } catch (error) {
-    console.error("Error fetching from DexScreener:", error);
+    console.error("[DexScreener] Error fetching Pump.fun tokens:", error);
     return [];
   }
 }
@@ -122,25 +183,33 @@ function convertToLeaderboardToken(
 }
 
 /**
- * Get top tokens by 24h volume
+ * Get top tokens by market cap (24h period)
  */
 export async function getTop24hTokens(
-  limit: number = 25
+  limit: number = 50
 ): Promise<ApiResponse<LeaderboardToken[]>> {
   try {
+    console.log("[DexScreener] Fetching Pump.fun tokens...");
     const pairs = await fetchPumpFunTokens();
+    console.log(`[DexScreener] Got ${pairs.length} pairs`);
 
     if (pairs.length === 0) {
-      // Fallback to mock data if API fails
-      const { getTop24hTokens: getMockData } = await import("./pumpfun");
-      return getMockData(limit);
+      console.warn("[DexScreener] No pairs found, returning empty result");
+      return {
+        data: [],
+        error: "No tokens found matching criteria",
+        timestamp: Date.now(),
+      };
     }
 
-    // Sort by 24h volume
+    // Sort by market cap (descending)
     const sorted = pairs
-      .sort((a, b) => (b.volume.h24 || 0) - (a.volume.h24 || 0))
+      .filter((pair) => pair.marketCap && pair.marketCap > 0)
+      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
       .slice(0, limit)
       .map((pair, index) => convertToLeaderboardToken(pair, index + 1));
+
+    console.log(`[DexScreener] Returning ${sorted.length} sorted tokens`);
 
     return {
       data: sorted,
@@ -148,7 +217,7 @@ export async function getTop24hTokens(
       timestamp: Date.now(),
     };
   } catch (error) {
-    console.error("Error in getTop24hTokens:", error);
+    console.error("[DexScreener] Error in getTop24hTokens:", error);
     return {
       data: null,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -158,24 +227,31 @@ export async function getTop24hTokens(
 }
 
 /**
- * Get top tokens by price change (7d approximation using 24h)
+ * Get top tokens by 24h volume (7d period view)
  */
 export async function getTop7dTokens(
-  limit: number = 25
+  limit: number = 50
 ): Promise<ApiResponse<LeaderboardToken[]>> {
   try {
+    console.log("[DexScreener] Fetching 7d tokens (sorted by volume)...");
     const pairs = await fetchPumpFunTokens();
 
     if (pairs.length === 0) {
-      const { getTop7dTokens: getMockData } = await import("./pumpfun");
-      return getMockData(limit);
+      return {
+        data: [],
+        error: "No tokens found matching criteria",
+        timestamp: Date.now(),
+      };
     }
 
-    // Sort by 24h price change (approximation for 7d)
+    // Sort by 24h volume (descending) to show most actively traded
     const sorted = pairs
-      .sort((a, b) => (b.priceChange.h24 || 0) - (a.priceChange.h24 || 0))
+      .filter((pair) => pair.volume && pair.volume.h24 > 0)
+      .sort((a, b) => (b.volume.h24 || 0) - (a.volume.h24 || 0))
       .slice(0, limit)
       .map((pair, index) => convertToLeaderboardToken(pair, index + 1));
+
+    console.log(`[DexScreener] Returning ${sorted.length} tokens sorted by volume`);
 
     return {
       data: sorted,
@@ -200,8 +276,15 @@ export async function getMarketStats(): Promise<ApiResponse<TokenStats>> {
     const pairs = await fetchPumpFunTokens();
 
     if (pairs.length === 0) {
-      const { getMarketStats: getMockData } = await import("./pumpfun");
-      return getMockData();
+      return {
+        data: {
+          totalVolume24h: 0,
+          activeTokens: 0,
+          topGainer: { symbol: "--", change: 0 },
+        },
+        error: null,
+        timestamp: Date.now(),
+      };
     }
 
     // Calculate stats from pairs
