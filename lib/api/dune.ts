@@ -30,6 +30,10 @@ interface DuneRow {
   total_supply: number;
   trade_count: number;
   vwap_token_price: number;
+  // Stats query fields
+  volume_usd_24h?: number;
+  tokens_created_24h?: number;
+  withdraw_token_last_24h?: number;
 }
 
 interface DuneResult {
